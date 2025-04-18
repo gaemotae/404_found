@@ -39,7 +39,7 @@ SECRET_KEY = 'django-insecure-%p)5)-j76%%gt1qs@)0n*9(faq+$=vro89c_0fdsf!nd$6h9a^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["four04-found-cr4m.onrender.com", "localhost", "127.0.0.1"]
 
 
 # Application definition
