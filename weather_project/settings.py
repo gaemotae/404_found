@@ -9,20 +9,26 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-from pathlib import Path
 
+from pathlib import Path
 import os
+import json
 import firebase_admin
 from firebase_admin import credentials
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Firebase 초기화
-cred = credentials.Certificate(os.path.join(BASE_DIR, 'c:/data/testkey.json'))
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://wearther-404found-default-rtdb.firebaseio.com/'  # 여기에 데이터베이스 URL 추가
-})
+# ✅ Firebase 초기화 (환경 변수 기반)
+firebase_key_json = os.environ.get("FIREBASE_KEY")
+
+if firebase_key_json:
+    cred = credentials.Certificate(json.loads(firebase_key_json))
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://wearther-404found-default-rtdb.firebaseio.com/'
+    })
+else:
+    raise FileNotFoundError("FIREBASE_KEY 환경 변수가 설정되지 않았습니다.")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -60,7 +66,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True # 모든 출처 허용
+CORS_ALLOW_ALL_ORIGINS = True
+
 ROOT_URLCONF = 'weather_project.urls'
 
 TEMPLATES = [
