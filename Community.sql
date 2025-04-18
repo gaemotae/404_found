@@ -8,7 +8,7 @@ CREATE TABLE Community (
     CONSTRAINT fk_community_user FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
 );
 
--- ÀÚµ¿ Áõ°¡ SEQUENCE & TRIGGER
+-- ï¿½Úµï¿½ ï¿½ï¿½ï¿½ï¿½ SEQUENCE & TRIGGER
 CREATE SEQUENCE community_seq START WITH 1 INCREMENT BY 1;
 CREATE OR REPLACE TRIGGER community_trigger
 BEFORE INSERT ON Community
