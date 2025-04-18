@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "932275548518",
+    "firebase_url": "https://wearther-404found-default-rtdb.firebaseio.com",
+    "project_id": "wearther-404found",
+    "storage_bucket": "wearther-404found.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932275548518:android:26f723aea15a0fd7ff58a7",
+        "android_client_info": {
+          "package_name": "com.team404found.wearther"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "932275548518-a9hddce94fnvo4g17n79b1emfm0c7ft0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIwz5Kpka8ql5K3iMTD78t_oUy7PGK1fw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "932275548518-a9hddce94fnvo4g17n79b1emfm0c7ft0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
