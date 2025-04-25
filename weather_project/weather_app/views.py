@@ -1,7 +1,7 @@
 # 요청 처리 및 반환
 import requests
 from django.http import JsonResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 from firebase_admin import firestore
 
 # Firestore 클라이언트 초기화
@@ -18,7 +18,7 @@ def get_weather_forecast(city_name):
         data = response.json()
         forecast_data = [
             {
-                'time': datetime.fromtimestamp(item['dt']).strftime('%Y-%m-%d %H:%M:%S'), 
+                'time': (datetime.fromtimestamp(item['dt']) + timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S'),
                 'temperature': item['main']['temp'],
                 'humidity': item['main']['humidity'],
                 'feels_like': item['main']['feels_like'],  # 체감 온도
