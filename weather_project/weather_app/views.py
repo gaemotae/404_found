@@ -3,6 +3,7 @@ import requests
 from django.http import JsonResponse
 from datetime import datetime, timedelta
 from firebase_admin import firestore
+from pytz import timezone 
 
 # Firestore 클라이언트 초기화
 db = firestore.client()
@@ -16,9 +17,10 @@ def get_weather_forecast(city_name):
         response.raise_for_status()  # HTTP 오류 발생 시 예외 처리
 
         data = response.json()
+        kst = timezone('Asia/Seoul')  # 한국 시간대 설정
         forecast_data = [
             {
-                'time': (datetime.fromtimestamp(item['dt']) + timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S'),
+                'time': datetime.fromtimestamp(item['dt'], kst).strftime('%Y-%m-%d %H:%M:%S'),
                 'temperature': item['main']['temp'],
                 'humidity': item['main']['humidity'],
                 'feels_like': item['main']['feels_like'],  # 체감 온도
