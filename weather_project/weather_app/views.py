@@ -4,6 +4,8 @@ from django.http import JsonResponse
 from datetime import datetime, timedelta
 from firebase_admin import firestore
 from pytz import timezone 
+import os
+import time
 
 # Firestore 클라이언트 초기화
 db = firestore.client()
@@ -17,7 +19,9 @@ def get_weather_forecast(city_name):
         response.raise_for_status()  # HTTP 오류 발생 시 예외 처리
 
         data = response.json()
-        kst = timezone('Asia/Seoul')  # 한국 시간대 설정
+        os.environ['TZ'] = 'Asia/Seoul'
+        time.tzset()
+        kst = timezone('Asia/Seoul') 
         forecast_data = [
             {
                 'time': datetime.utcfromtimestamp(item['dt']).replace(tzinfo=timezone('UTC')).astimezone(kst).strftime('%Y-%m-%d %H:%M:%S'),
