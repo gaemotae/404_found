@@ -16,8 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import HttpResponse  # ✅ 추가
+
+# ✅ 루트에 기본 응답 함수 추가
+def index(request):
+    return HttpResponse("🟢 Django 서버 정상 작동 중입니다.")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('weather/', include('weather_app.urls')),
-]
+    path('', index),  # ✅ 루트 URL 처리 추가
+    path('
