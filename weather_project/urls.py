@@ -25,4 +25,5 @@ def index(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', index),  # ✅ 루트 URL 처리 추가
-    path('
+    path('weather/', include('weather_app.urls')),
+]
