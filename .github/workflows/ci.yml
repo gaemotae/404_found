@@ -1,0 +1,54 @@
+name: Backend checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            app-api/requirements.txt
+            weather-api/requirements.txt
+      - name: Install dependencies
+        run: >-
+          pip install
+          -r requirements-dev.txt
+          -r app-api/requirements.txt
+          -r weather-api/requirements.txt
+      - name: Lint and formatting
+        run: |
+          ruff check app-api weather-api
+          ruff format --check app-api weather-api
+      - name: Compile Python sources
+        run: python -m compileall -q app-api weather-api
+      - name: Validate Flask application
+        working-directory: app-api
+        env:
+          FIREBASE_INIT_REQUIRED: "false"
+          JWT_SECRET_KEY: ci-only-secret
+        run: >-
+          python -c "from com.example.app import app;
+          client = app.test_client();
+          assert client.get('/ping').status_code == 200"
+      - name: Test Application API helpers
+        working-directory: app-api
+        run: python -m unittest discover -s tests
+      - name: Validate Django configuration
+        working-directory: weather-api
+        env:
+          DJANGO_SECRET_KEY: ci-only-secret
+          OPENWEATHER_API_KEY: ci-placeholder
+        run: |
+          python manage.py check
+          python manage.py test

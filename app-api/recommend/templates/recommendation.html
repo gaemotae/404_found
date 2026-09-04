@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI 추천 결과</title>
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+    h1 { font-size: 2em; }
+    #recommendResult { margin-top: 20px; }
+    img { margin-top: 8px; border: 1px solid #ddd; border-radius: 4px; }
+    .result-list { margin-top: 16px; }
+    .result-list li { margin-bottom: 12px; }
+    #commentBox { margin-top: 20px; }
+    textarea { width: 100%; height: 80px; padding: 8px; margin-bottom: 8px; }
+    #aiBox { margin-top: 20px; padding: 12px; border: 1px solid #ccc; background: #fafafa; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>AI 추천 결과</h1>
+  <p>
+    <label for="locationInput">위치:</label>
+    <input type="text" id="locationInput" value="서울특별시" placeholder="예: 서울특별시">
+    <label for="dayIndexInput">Day Index (0=오늘):</label>
+    <input type="number" id="dayIndexInput" value="0" min="0" max="7">
+  </p>
+  <button id="recommendBtn">AI 추천 받기</button>
+  <div id="recommendResult"></div>
+
+  <div id="commentBox" style="display:none;">
+    <h2>추천에 대한 코멘트</h2>
+    <textarea id="commentInput" placeholder="코멘트를 입력하세요..."></textarea>
+    <button id="sendCommentBtn">코멘트 보내기</button>
+    <div id="commentStatus"></div>
+  </div>
+
+  <div id="aiBox" style="display:none;">
+    <h2>AI 분석 결과</h2>
+    <pre id="aiResponse" style="white-space: pre-wrap;"></pre>
+
+    <h3>코멘트 반영한 새로운 코디 추천</h3>
+    <ul id="newRecommendList" class="result-list"></ul>
+  </div>
+
+  <script>
+    // 이미지 포함 추천 렌더링
+    function renderItem(item) {
+      if (!item) return '없음';
+      if (typeof item === 'string') return item;
+
+      const category = item.category || '';
+      const filename = item.filename ? ` (${item.filename})` : '';
+      const url = item.url;
+
+      let html = `${category}${filename}`;
+      if (url) {
+        // 기존 코드와 동일한 이미지 표시 로직
+        html += `<br><img src="${url}" width="150" loading="lazy" referrerpolicy="no-referrer">`;
+      }
+      return html;
+    }
+
+    // ===== 1. 기본 추천 =====
+    document.getElementById('recommendBtn').addEventListener('click', async () => {
+      const resultDiv = document.getElementById('recommendResult');
+      resultDiv.innerHTML = '추천 결과 불러오는 중...';
+      document.getElementById('commentBox').style.display = 'none';
+      document.getElementById('aiBox').style.display = 'none';
+
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        resultDiv.innerHTML = '로그인이 필요합니다.';
+        return;
+      }
+
+      // ✅ location과 day_index 값 가져오기
+      const location = document.getElementById('locationInput').value.trim() || '서울특별시';
+      const day_index = parseInt(document.getElementById('dayIndexInput').value, 10) || 0;
+
+      try {
+        const response = await fetch('/api/recommend/recommendations/ai', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + jwt,
+            'Content-Type': 'application/json'
+          },
+          // ✅ 백엔드 변경 사항 반영: city 대신 location, day_index 추가
+          body: JSON.stringify({ location: location, day_index: day_index })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMsg = errorData.error || '추천 API 호출 실패';
+          throw new Error(errorMsg + (errorData.detail ? ` (${errorData.detail})` : ''));
+        }
+        const data = await response.json();
+
+        // 원래 추천 표시
+        const rec = data.recommended || {};
+        let html = `<h2>원래 추천 (위치: ${location}, Day: ${day_index})</h2><ul class="result-list">`;
+        if ('top' in rec)   html += `<li>상의: ${renderItem(rec.top)}</li>`;
+        if ('bottom' in rec)html += `<li>하의: ${renderItem(rec.bottom)}</li>`;
+        if ('outer' in rec) html += `<li>아우터: ${renderItem(rec.outer)}</li>`;
+        if (data.temp !== undefined && data.temp !== null) html += `<li>기온: ${data.temp}℃</li>`;
+        if (data.weather_code !== undefined) html += `<li>날씨코드: ${data.weather_code}</li>`;
+        html += '</ul>';
+        resultDiv.innerHTML = html;
+
+        document.getElementById('commentBox').style.display = 'block';
+      } catch (e) {
+        resultDiv.innerHTML = '❌ 오류: ' + e.message;
+      }
+    });
+
+    // ===== 2. 코멘트 전송 후 새 추천 =====
+    document.getElementById('sendCommentBtn').addEventListener('click', async () => {
+      const comment = document.getElementById('commentInput').value.trim();
+      const statusDiv = document.getElementById('commentStatus');
+      const aiBox = document.getElementById('aiBox');
+      const aiResponseDiv = document.getElementById('aiResponse');
+      const newRecommendList = document.getElementById('newRecommendList');
+
+      if (!comment) {
+        statusDiv.innerHTML = '코멘트를 입력하세요.';
+        return;
+      }
+
+      const jwt = localStorage.getItem('jwt');
+      if (!jwt) {
+        statusDiv.innerHTML = '로그인이 필요합니다.';
+        return;
+      }
+
+      // ✅ location과 day_index 값 가져오기
+      const location = document.getElementById('locationInput').value.trim() || '서울특별시';
+      const day_index = parseInt(document.getElementById('dayIndexInput').value, 10) || 0;
+
+
+      try {
+        statusDiv.innerHTML = '코멘트 분석 및 새 추천 불러오는 중...';
+
+        const response = await fetch('/api/recommend/recommendations/ai', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + jwt,
+            'Content-Type': 'application/json'
+          },
+          // ✅ 백엔드 변경 사항 반영: city 대신 location, day_index 추가
+          body: JSON.stringify({ location: location, day_index: day_index, comment })
+        });
+
+        if (!response.ok) {
+           const errorData = await response.json();
+           const errorMsg = errorData.error || '코멘트 전송 실패';
+           throw new Error(errorMsg + (errorData.detail ? ` (${errorData.detail})` : ''));
+        }
+        const data = await response.json();
+
+        statusDiv.innerHTML = '✅ 코멘트가 성공적으로 전송되었습니다.';
+        document.getElementById('commentInput').value = '';
+
+        // AI 분석 결과 JSON 그대로 보여주기
+        aiResponseDiv.textContent = '';
+        if (data.replace_json) {
+          aiResponseDiv.textContent = JSON.stringify(data.replace_json, null, 2);
+          aiBox.style.display = 'block';
+        }
+
+        // 새 추천 표시 (추천 모델이 반환한 이미지 포함)
+        newRecommendList.innerHTML = '';
+        if (data.new_recommend && data.new_recommend.recommended) {
+          const nr = data.new_recommend.recommended;
+          let newRecHtml = '';
+          if (nr.top)    newRecHtml += `<li>상의: ${renderItem(nr.top)}</li>`;
+          if (nr.bottom) newRecHtml += `<li>하의: ${renderItem(nr.bottom)}</li>`;
+          if (nr.outer)  newRecHtml += `<li>아우터: ${renderItem(nr.outer)}</li>`;
+          if (data.new_recommend.temp !== undefined) {
+            newRecHtml += `<li>기온: ${data.new_recommend.temp}℃</li>`;
+          }
+          newRecommendList.innerHTML = newRecHtml;
+        } else {
+             newRecommendList.innerHTML = '<li>새로운 추천 결과를 받지 못했습니다. (AI 분석 실패 또는 재호출 문제)</li>';
+        }
+      } catch (e) {
+        statusDiv.innerHTML = '❌ 오류: ' + e.message;
+      }
+    });
+  </script>
+</body>
+</html>

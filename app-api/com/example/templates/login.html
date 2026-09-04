@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WEARTHER 로그인</title>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <h1>WEARTHER</h1>
+    <form id="loginForm">
+        <label for="email">이메일</label>
+        <input type="email" id="email" required>
+        <label for="password">비밀번호</label>
+        <input type="password" id="password" required>
+        <button type="submit">로그인</button>
+    </form>
+
+    <p id="result" role="status"></p>
+
+    <nav id="userSection" hidden>
+        <button id="logoutBtn" type="button">로그아웃</button>
+        <a href="/upload">이미지 업로드</a>
+        <a href="/upload/my_images_page">내 이미지</a>
+        <a href="/recommendation">코디 추천</a>
+        <a href="/user/settings_page">환경설정</a>
+        <a href="/api/history/outfits_history">추천 기록</a>
+        <a href="/api/history/all_outfits_history">전체 추천 기록</a>
+        <a href="/community">커뮤니티</a>
+    </nav>
+
+    <script>
+        const firebaseConfig = {{ firebase_config | tojson }};
+        firebase.initializeApp(firebaseConfig);
+
+        const loginForm = document.getElementById('loginForm');
+        const userSection = document.getElementById('userSection');
+        const result = document.getElementById('result');
+
+        function showLogin() {
+            loginForm.hidden = false;
+            userSection.hidden = true;
+            result.textContent = '';
+        }
+
+        function showUser(label = '로그인된 사용자') {
+            loginForm.hidden = true;
+            userSection.hidden = false;
+            result.textContent = `로그인 성공: ${label}`;
+        }
+
+        window.addEventListener('load', async () => {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) return showLogin();
+
+            const response = await fetch('/auth/verify_token', {
+                headers: { Authorization: `Bearer ${jwt}` },
+            });
+            if (response.ok) return showUser();
+
+            localStorage.removeItem('jwt');
+            showLogin();
+        });
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            try {
+                const credential = await firebase.auth().signInWithEmailAndPassword(
+                    document.getElementById('email').value,
+                    document.getElementById('password').value,
+                );
+                const idToken = await credential.user.getIdToken();
+                const response = await fetch('/auth/firebase/', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${idToken}` },
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.token) {
+                    throw new Error(payload.error || '로그인에 실패했습니다.');
+                }
+                localStorage.setItem('jwt', payload.token);
+                showUser(payload.email || payload.uid);
+            } catch (error) {
+                result.textContent = error.message;
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            const jwt = localStorage.getItem('jwt');
+            if (jwt) {
+                await fetch('/logout', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${jwt}` },
+                });
+            }
+            localStorage.removeItem('jwt');
+            await firebase.auth().signOut();
+            showLogin();
+        });
+    </script>
+</body>
+</html>

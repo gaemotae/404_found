@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>환경설정</title>
+</head>
+<body>
+    <h2>환경설정</h2>
+
+    <label>닉네임:</label>
+    <input type="text" id="nickname" placeholder="닉네임 입력" /><br /><br />
+
+    <label>비밀번호:</label>
+    <input type="password" id="password" placeholder="새 비밀번호 입력" /><br /><br />
+
+    <label>
+        <input type="checkbox" id="pushToggle" />
+        푸시 알림 받기
+    </label><br /><br />
+
+    <label>나이대:</label>
+    <select id="age_group">
+        <option value="10">10대</option>
+        <option value="20">20대</option>
+        <option value="30">30대</option>
+        <option value="40">40대</option>
+        <option value="50">50대</option>
+        <option value="60">60대</option>
+        <option value="70">70대</option>
+        <option value="80">80대</option>
+        <option value="90">90대</option>
+    </select><br /><br />
+
+    <form id="profileImageForm" enctype="multipart/form-data" style="margin-bottom:16px;">
+        <label>프로필 사진 변경:</label>
+        <input type="file" id="profileImage" accept="image/*"><br>
+        <button type="submit">사진 업로드</button>
+    </form>
+    <img id="currentProfileImage" src="" alt="프로필 사진" style="max-width:120px;display:none;">
+    <div id="profileImageResult"></div>
+
+    <button id="saveBtn">저장하기</button>
+    <div id="msg" style="margin-top: 20px;"></div>
+
+    <script>
+        async function loadSettings() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
+            const res = await fetch('/user/settings', {
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+
+            if (!res.ok) {
+                alert('설정을 불러오지 못했습니다.');
+                if(res.status === 401){
+                    localStorage.removeItem('jwt');
+                    window.location.href = '/login';
+                }
+                return;
+            }
+
+            const data = await res.json();
+            document.getElementById('nickname').value = data.nickname || '';
+            document.getElementById('pushToggle').checked = data.push_notifications_enabled || false;
+            if (data.profile_image) {
+                document.getElementById('currentProfileImage').src = data.profile_image;
+                document.getElementById('currentProfileImage').style.display = '';
+            }
+            if (data.age_group) {
+                document.getElementById('age_group').value = data.age_group;
+            }
+        }
+
+        async function saveSettings() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+
+            const nickname = document.getElementById('nickname').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const pushEnabled = document.getElementById('pushToggle').checked;
+            const age_group = document.getElementById('age_group').value;
+
+            const payload = {
+                push_notifications_enabled: pushEnabled,
+                age_group: age_group
+            };
+            if (nickname) payload.nickname = nickname;
+            if (password) payload.password = password;
+
+            const res = await fetch('/user/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + jwt
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const msgDiv = document.getElementById('msg');
+            if (res.ok) {
+                msgDiv.innerText = '설정이 저장되었습니다.';
+                document.getElementById('password').value = '';
+            } else {
+                msgDiv.innerText = '저장 실패. 다시 시도해주세요.';
+                if(res.status === 401){
+                    localStorage.removeItem('jwt');
+                    window.location.href = '/login';
+                }
+            }
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', saveSettings);
+
+        document.getElementById('profileImageForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('profileImage');
+            if (!fileInput.files.length) return alert('이미지를 선택하세요.');
+            const jwt = localStorage.getItem('jwt');
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            const res = await fetch('/user/profile_image', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt },
+                body: formData
+            });
+            const result = await res.json();
+            const resultDiv = document.getElementById('profileImageResult');
+            if (res.ok) {
+                resultDiv.innerHTML = `<p>${result.message}</p>`;
+                document.getElementById('currentProfileImage').src = result.url;
+                document.getElementById('currentProfileImage').style.display = '';
+            } else {
+                resultDiv.innerHTML = `<p style="color:red;">${result.message}</p>`;
+            }
+        });
+
+        window.onload = loadSettings;
+    </script>
+</body>
+</html>
