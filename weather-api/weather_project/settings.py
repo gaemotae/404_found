@@ -10,6 +10,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(
+            f"Set the {name} environment variable before starting Django."
+        )
+    return value
+
+
+SECRET_KEY = required_env("DJANGO_SECRET_KEY")
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -49,7 +61,6 @@ def initialize_firebase() -> None:
 
 initialize_firebase()
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "local-development-only-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 

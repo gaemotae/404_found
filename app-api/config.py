@@ -10,6 +10,15 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(
+            f"Set the {name} environment variable before starting the API."
+        )
+    return value
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -24,7 +33,7 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 class Config:
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "local-development-only")
+    JWT_SECRET_KEY = required_env("JWT_SECRET_KEY")
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", "86400"))
