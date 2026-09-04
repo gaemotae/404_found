@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>이미지 업로드</title>
+    <style>
+        /* 기존 스타일 */
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 28px; }
+        h1 { margin-bottom: 10px; }
+        fieldset { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-top: 16px; }
+        legend { padding: 0 6px; color: #374151; }
+        .row { margin: 8px 0; }
+        .chips label { display:inline-block; margin: 4px 8px 4px 0; }
+        .btn { padding: 8px 14px; border: 0; border-radius: 6px; background: #2563eb; color:#fff; cursor:pointer; }
+        .btn:disabled { opacity:.6; cursor:not-allowed; }
+        .muted { color:#6b7280; font-size: 13px; }
+        .imgbox img { max-width: 280px; border: 1px solid #e5e7eb; border-radius: 6px; }
+
+        /* ✅ 추가된 스타일 */
+        .update-section { margin-top: 32px; border-top: 2px solid #e5e7eb; padding-top: 24px; }
+        .btn-update { background: #10b981; }
+        .btn-update:hover { background: #059669; }
+    </style>
+</head>
+<body>
+    <h1>Firebase Storage에 이미지 업로드 (미리보기 → 확정 저장)</h1>
+
+    <fieldset>
+        <legend>의류 대분류 선택 (사용자 입력)</legend>
+        <div id="typeGroup" class="chips">
+            <label><input type="radio" name="main_type" value="상의"> 상의</label>
+            <label><input type="radio" name="main_type" value="하의"> 하의</label>
+            <label><input type="radio" name="main_type" value="아우터"> 아우터</label>
+            <label><input type="radio" name="main_type" value="원피스"> 원피스</label>
+            <span class="muted">* 선택은 선택사항이지만, 저장 시 함께 기록하면 필터/검색에 편해요.</span>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>1단계: AI 분석</legend>
+        <form id="analyzeForm">
+            <div class="row">
+                <input type="file" id="image" name="image" accept="image/*" required />
+            </div>
+            <button class="btn" type="submit">AI 분석 먼저 하기</button>
+        </form>
+        <div class="muted">이미지를 선택하고 분석을 먼저 실행하면, 결과를 수정한 뒤 최종 저장할 수 있어요.</div>
+    </fieldset>
+
+    <div id="preview" style="margin-top: 16px;"></div>
+    <div id="finalResult" style="margin-top: 16px;"></div>
+
+    <div class="update-section">
+        <h2>기존 이미지 정보 수정</h2>
+        <fieldset>
+            <legend>이미지 메타데이터 수정 (이미지 파일은 그대로 유지)</legend>
+            <form id="updateForm">
+                <div class="row">
+                    <label>이미지 ID:
+                        <input type="text" id="updateImageId" placeholder="예: 65g9EOBUeQb63go7zS9J" required style="width: 300px;" />
+                    </label>
+                    <span class="muted">* 수정하려는 이미지의 문서 ID를 입력하세요</span>
+                </div>
+
+                <div class="row">
+                    <label>대분류:
+                        <span class="muted">* 상의/하의/아우터/원피스</span>
+                    </label>
+                    <div class="chips" style="margin-top:4px;">
+                        <label><input type="radio" name="update_type" value="상의"> 상의</label>
+                        <label><input type="radio" name="update_type" value="하의"> 하의</label>
+                        <label><input type="radio" name="update_type" value="아우터"> 아우터</label>
+                        <label><input type="radio" name="update_type" value="원피스"> 원피스</label>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label>의류 종류(세부):
+                        <select id="updateCategory" name="category">
+                            <option value="">선택 안 함</option>
+                            <option value="sleeveless">민소매</option>
+                            <option value="shortsleeve">반소매</option>
+                            <option value="longsleeve">긴소매</option>
+                            <option value="hood">후드</option>
+                            <option value="shirt">셔츠</option>
+                            <option value="sweater">스웨터</option>
+                            <option value="shorts">반바지</option>
+                            <option value="cotton pants">코튼 팬츠</option>
+                            <option value="denim">데님</option>
+                            <option value="trainingpants">트레이닝 팬츠</option>
+                            <option value="slacks">슬랙스</option>
+                            <option value="skirt">스커트</option>
+                            <option value="jumper">점퍼</option>
+                            <option value="blazer">블레이저</option>
+                            <option value="cardigan">가디건</option>
+                            <option value="coat">코트</option>
+                            <option value="longpedding">롱패딩</option>
+                            <option value="shortpedding">숏패딩</option>
+                            <option value="hoodzip">후드집업</option>
+                            <option value="fleece">플리스</option>
+                            <option value="dress">드레스</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="row">
+                    <label>소재:
+                        <select id="updateMaterial" name="material">
+                            <option value="">선택 안 함</option>
+                            <option value="면">면</option>
+                            <option value="데님">데님</option>
+                            <option value="린넨/마">린넨/마</option>
+                            <option value="가죽">가죽</option>
+                            <option value="퍼/털">퍼/털</option>
+                            <option value="시폰/얇은 원단">시폰/얇은 원단</option>
+                            <option value="실크/새틴">실크/새틴</option>
+                            <option value="스판덱스/스포츠 원단">스판덱스/스포츠 원단</option>
+                            <option value="나일론/방수">나일론/방수</option>
+                            <option value="울/정장소재">울/정장소재</option>
+                            <option value="니트/스웨터소재">니트/스웨터소재</option>
+                            <option value="벨벳">벨벳</option>
+                            <option value="트위드">트위드</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="row">
+                    <label>색상:</label><br/>
+                    <div class="chips">
+                        <label><input type="checkbox" name="update_colors" value="Beige"/> 베이지</label>
+                        <label><input type="checkbox" name="update_colors" value="Black"/> 검정</label>
+                        <label><input type="checkbox" name="update_colors" value="Blue"/> 파랑</label>
+                        <label><input type="checkbox" name="update_colors" value="Brown"/> 갈색</label>
+                        <label><input type="checkbox" name="update_colors" value="Gray"/> 회색</label>
+                        <label><input type="checkbox" name="update_colors" value="Green"/> 초록</label>
+                        <label><input type="checkbox" name="update_colors" value="Orange"/> 주황</label>
+                        <label><input type="checkbox" name="update_colors" value="Pink"/> 분홍</label>
+                        <label><input type="checkbox" name="update_colors" value="Purple"/> 보라</label>
+                        <label><input type="checkbox" name="update_colors" value="Red"/> 빨강</label>
+                        <label><input type="checkbox" name="update_colors" value="White"/> 하양</label>
+                        <label><input type="checkbox" name="update_colors" value="Yellow"/> 노랑</label>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <label>적정 온도대(선택):
+                        <input type="text" id="updateTemperature" name="suitable_temperature" placeholder="예: 16℃~12℃" />
+                    </label>
+                </div>
+
+                <button class="btn btn-update" type="submit">메타데이터 업데이트</button>
+            </form>
+            <div id="updateResult" style="margin-top: 16px;"></div>
+        </fieldset>
+    </div>
+    <script>
+        // 세부 카테고리 매핑 (영문 → 한글, 전송값은 key 그대로 보냄)
+        const categoryMap = {
+            'blazer': '블레이저',
+            'cardigan': '가디건',
+            'coat': '코트',
+            'cotton pants': '코튼 팬츠',
+            'denim': '데님',
+            'dress': '드레스',
+            'hood': '후드',
+            'hoodzip': '후드집업',
+            'fleece': '플리스',
+            'jumper': '점퍼',
+            'longpedding': '롱패딩',
+            'shortpedding': '숏패딩',
+            'longsleeve': '긴소매',
+            'shortsleeve': '반소매',
+            'sleeveless': '민소매',
+            'shirt': '셔츠',
+            'sweater': '스웨터',
+            'shorts': '반바지',
+            'slacks': '슬랙스',
+            'skirt': '스커트',
+            'trainingpants': '트레이닝 팬츠'
+        };
+
+        // 색상 매핑 (영문 → 한글, 전송값은 key 그대로)
+        const colorMap = {
+            'Beige': '베이지',
+            'Black': '검정',
+            'Blue': '파랑',
+            'Brown': '갈색',
+            'Gray': '회색',
+            'Green': '초록',
+            'Orange': '주황',
+            'Pink': '분홍',
+            'Purple': '보라',
+            'Red': '빨강',
+            'White': '하양',
+            'Yellow': '노랑'
+        };
+
+        // 소재 목록(전송/표시 동일: 한글)
+        const materialMap = {
+            '면': '면',
+            '데님': '데님',
+            '린넨/마': '린넨/마',
+            '가죽': '가죽',
+            '퍼/털': '퍼/털',
+            '시폰/얇은 원단': '시폰/얇은 원단',
+            '실크/새틴': '실크/새틴',
+            '스판덱스/스포츠 원단': '스판덱스/스포츠 원단',
+            '나일론/방수': '나일론/방수',
+            '울/정장소재': '울/정장소재',
+            '니트/스웨터소재': '니트/스웨터소재',
+            '벨벳': '벨벳',
+            '트위드': '트위드'
+        };
+
+        const analyzeForm = document.getElementById('analyzeForm');
+        const previewDiv = document.getElementById('preview');
+        const finalResultDiv = document.getElementById('finalResult');
+        let selectedFile = null;
+
+        analyzeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const imageInput = document.getElementById('image');
+            if (!imageInput.files || !imageInput.files[0]) {
+                alert('이미지를 선택해주세요.');
+                return;
+            }
+            selectedFile = imageInput.files[0];
+
+            // 1) /upload/analyze 로 AI 분석
+            const analyzeFormData = new FormData();
+            analyzeFormData.append('image', selectedFile);
+
+            const analyzeRes = await fetch('/upload/analyze', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt },
+                body: analyzeFormData
+            });
+
+            const analyzeJson = await analyzeRes.json();
+            if (!analyzeRes.ok || !analyzeJson.success) {
+                previewDiv.innerHTML = `<p style="color:red;">AI 분석 실패: ${analyzeJson.error || 'unknown'}</p>`;
+                return;
+            }
+
+            // ✅ 백엔드가 통일해서 보내주는 키: type, category, colors, material, suitable_temperature
+            const { type, category, colors = [], material = '', suitable_temperature = '' } = analyzeJson;
+
+            // 2) 미리보기/수정 폼 출력
+            // - 라디오: AI type 자동 선택 (없으면 사용자가 0단계에서 선택한 값 유지)
+            const userPreselected =
+                (document.querySelector('input[name="main_type"]:checked') || {}).value || '';
+            const aiType = type || userPreselected;
+
+            previewDiv.innerHTML = `
+                <fieldset>
+                    <legend>2단계: 분석 결과 미리보기 (수정 가능, 아직 저장 안 됨)</legend>
+                    <div class="row imgbox">
+                        <img src="${URL.createObjectURL(selectedFile)}" alt="미리보기" />
+                    </div>
+
+                    <form id="finalUploadForm">
+                        <div class="row">
+                            <label>대분류 (AI 결과를 기본 선택):
+                                <span class="muted">* 상의/하의/아우터/원피스</span>
+                            </label>
+                            <div class="chips" style="margin-top:4px;">
+                                ${['상의','하의','아우터','원피스'].map(mt => `
+                                    <label>
+                                        <input type="radio" name="main_type" value="${mt}" ${aiType === mt ? 'checked' : ''}> ${mt}
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <label>의류 종류(세부):
+                                <select name="category">
+                                    ${Object.entries(categoryMap).map(([en, ko]) =>
+                                        `<option value="${en}" ${category === en ? 'selected' : ''}>${ko}</option>`
+                                    ).join('')}
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="row">
+                            <label>소재:
+                                <select name="material">
+                                    ${Object.entries(materialMap).map(([val, label]) =>
+                                        `<option value="${val}" ${material === val ? 'selected' : ''}>${label}</option>`
+                                    ).join('')}
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="row">
+                            <label>색상:</label><br/>
+                            <div class="chips">
+                                ${Object.entries(colorMap).map(([en, ko]) =>
+                                    `<label><input type="checkbox" name="colors" value="${en}" ${colors.includes(en) ? 'checked' : ''}/> ${ko}</label>`
+                                ).join('')}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <label>적정 온도대(선택):
+                                <input type="text" name="suitable_temperature" placeholder="예: 16℃~12℃" value="${suitable_temperature || ''}" />
+                            </label>
+                        </div>
+
+                        <button class="btn" type="submit">3단계: 확정 업로드 (DB 저장)</button>
+                    </form>
+                </fieldset>
+            `;
+
+            // 3) 확정 업로드
+            document.getElementById('finalUploadForm').addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+
+                const formEl = ev.target;
+                const category_val = formEl.category.value;
+                const material_val = formEl.material.value;
+                const colors_vals = Array.from(formEl.querySelectorAll('input[name="colors"]:checked')).map(c => c.value);
+                const suitable_temp_val = formEl.suitable_temperature.value || '';
+                const main_type_val = (formEl.querySelector('input[name="main_type"]:checked') || {}).value || '';
+
+                const saveFormData = new FormData();
+                saveFormData.append('image', selectedFile);
+                if (main_type_val) saveFormData.append('type', main_type_val);
+                saveFormData.append('category', category_val);
+                saveFormData.append('material', material_val);
+                saveFormData.append('colors', colors_vals.join(','));
+                saveFormData.append('suitable_temperature', suitable_temp_val);
+
+                const jwt = localStorage.getItem('jwt');
+                const saveRes = await fetch('/upload/', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + jwt },
+                    body: saveFormData
+                });
+
+                const saveJson = await saveRes.json();
+                if (saveRes.ok && saveJson.success) {
+                    finalResultDiv.innerHTML = `
+                        <fieldset>
+                            <legend>저장 완료</legend>
+                            <p>문서 ID: ${saveJson.id}</p>
+                            <p><a href="${saveJson.url}" target="_blank">저장된 이미지 보기</a></p>
+                        </fieldset>
+                    `;
+                    alert('업로드(저장) 성공!');
+                } else {
+                    finalResultDiv.innerHTML = `<p style="color:red;">저장 실패: ${saveJson.error || 'unknown'}</p>`;
+                    alert('저장 실패');
+                }
+            });
+        });
+
+        // ✅ 새로 추가: 기존 이미지 수정 폼 처리
+        const updateForm = document.getElementById('updateForm');
+        const updateResultDiv = document.getElementById('updateResult');
+
+        updateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const imageId = document.getElementById('updateImageId').value.trim();
+            if (!imageId) {
+                alert('이미지 ID를 입력해주세요.');
+                return;
+            }
+
+            const formEl = e.target;
+
+            // 선택된 값들 수집
+            const updateData = {};
+
+            // 대분류
+            const typeRadio = formEl.querySelector('input[name="update_type"]:checked');
+            if (typeRadio) {
+                updateData.type = typeRadio.value;
+            }
+
+            // 세부 카테고리
+            const category = document.getElementById('updateCategory').value;
+            // '선택 안 함'을 제외하고 값이 있을 때만 전송
+            if (category) {
+                updateData.category = category;
+            }
+
+            // 소재
+            const material = document.getElementById('updateMaterial').value;
+            if (material) {
+                updateData.material = material;
+            }
+
+            // 색상
+            const colors = Array.from(formEl.querySelectorAll('input[name="update_colors"]:checked'))
+                .map(c => c.value);
+            // 선택된 색상이 있으면 배열로 전송
+            if (colors.length > 0) {
+                updateData.colors = colors;
+            }
+            // 색상 체크박스가 하나도 선택 안 되었고, 사용자가 이 필드를 '업데이트'하려는 의도가 있다면 (JSON PATCH의 특성상 여기서는 모든 체크박스 필드를 다뤄야 함)
+            // * 참고: 이 폼에서는 체크된 값만 보냄으로써 PATCH의 '부분 수정'을 구현하고, 빈 리스트를 보내려면 명시적으로 선택 해제된 것을 감지해야 하는데,
+            //         간단하게는 '색상' 필드 자체를 체크박스가 하나도 없으면 아예 안 보내는 것으로 구현하여 백엔드의 PATCH에 맡기는 것이 일반적입니다.
+
+            // 적정 온도
+            const temperature = document.getElementById('updateTemperature').value.trim();
+            if (temperature) {
+                updateData.suitable_temperature = temperature;
+            }
+
+            // 업데이트할 필드가 없으면 에러
+            if (Object.keys(updateData).length === 0) {
+                alert('최소 하나 이상의 필드를 선택해주세요.');
+                return;
+            }
+
+            try {
+                // PATCH 요청: /upload/update_image/<image_id>
+                const updateRes = await fetch(`/upload/update_image/${imageId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'Bearer ' + jwt,
+                        'Content-Type': 'application/json' // ✅ JSON 형식으로 전송
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                const updateJson = await updateRes.json();
+
+                if (updateRes.ok && updateJson.success) {
+                    updateResultDiv.innerHTML = `
+                        <p style="color: green; font-weight: bold;">✅ 업데이트 성공!</p>
+                        <p>이미지 ID: ${updateJson.id || imageId}</p>
+                        <pre>${JSON.stringify(updateData, null, 2)}</pre>
+                    `;
+                    alert('메타데이터가 성공적으로 업데이트되었습니다!');
+                } else {
+                    updateResultDiv.innerHTML = `
+                        <p style="color: red;">❌ 업데이트 실패: ${updateJson.error || 'Unknown error'}</p>
+                    `;
+                    alert('업데이트 실패: ' + (updateJson.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('업데이트 오류:', error);
+                updateResultDiv.innerHTML = `
+                    <p style="color: red;">❌ 네트워크 오류: ${error.message}</p>
+                `;
+                alert('네트워크 오류가 발생했습니다.');
+            }
+        });
+    </script>
+</body>
+</html>

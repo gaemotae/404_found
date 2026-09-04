@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>커뮤니티</title>
+    <style>
+        /* CSS 스타일은 변경 없음 */
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        .card-list { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .card-item {
+            border: 2px solid #ccc; padding: 5px; cursor: pointer; width: 110px; text-align: center; background: #fafafa;
+            transition: border 0.2s;
+        }
+        .card-item.selected { border: 2px solid #007bff; background: #eaf4ff; }
+        .card-item img { width: 100px; height: 100px; object-fit: cover; }
+        .card-label { font-size: 11px; color: #555; }
+        .comment-box { margin-top: 12px; background: #f8f8f8; border-radius: 8px; padding: 10px; }
+        .comment-item { border-bottom: 1px solid #eee; padding: 4px 0; font-size: 14px; }
+        .comment-item:last-child { border-bottom: none; }
+        .comment-nick { font-weight: bold; }
+        .comment-date { font-size: 12px; color: #888; margin-left: 6px; }
+        .post-img { max-width: 200px; margin: 8px 0; border-radius: 6px; }
+        .closet-img { max-width: 120px; margin: 4px 0; border-radius: 6px; }
+        .reco-img { max-width: 80px; margin: 2px 0; border-radius: 6px; }
+        .closet-selected-count { font-size: 13px; color: #007bff; margin-left: 8px; }
+        .reply-item { margin-left:24px; font-size:13px; border-left:2px solid #eee; padding-left:8px; background:#f9f9f9; margin-top:4px; }
+        .like-btn { background:none; border:none; cursor:pointer; font-size:18px; vertical-align:middle; }
+        .like-heart { transition: color 0.2s; }
+        .like-heart.liked { color: #e74c3c; }
+        .like-heart.unliked { color: #bbb; }
+        .profile-img { width:32px; height:32px; border-radius:50%; vertical-align:middle; margin-right:8px; object-fit:cover; background:#eee; cursor:pointer; }
+        .default-profile-icon { width:32px; height:32px; vertical-align:middle; margin-right:8px; display:inline-block; cursor:pointer; }
+        .modal-bg {
+            position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.3); z-index: 1000; display: none;
+            align-items: center; justify-content: center;
+        }
+        .modal {
+            background: #fff; border-radius: 16px; padding: 32px 24px; min-width: 320px; box-shadow: 0 4px 24px #0002;
+        }
+        .modal input[type="text"] { width: 80%; padding: 8px; margin-bottom: 12px; }
+        .modal .search-result { margin-top: 12px; }
+        .modal .search-item { display: flex; align-items: center; margin-bottom: 8px; }
+        .modal .search-nick { font-weight: bold; margin-right: 8px; cursor: pointer; }
+        .modal .search-btn { margin-left: 8px; }
+    </style>
+</head>
+<body>
+    <h2>커뮤니티</h2>
+    <form id="postForm" enctype="multipart/form-data" style="display:inline-block;">
+        <textarea id="content" rows="3" cols="40" placeholder="글을 작성하세요"></textarea><br>
+        <input type="file" id="image" accept="image/*" multiple><br>
+        <div>
+            <b>옷장 이미지 첨부:</b>
+            <button type="button" id="toggleClosetBtn" style="margin-left:8px;">▼ 펼치기</button>
+            <span id="closetSelectedCount" class="closet-selected-count"></span>
+            <input type="text" id="closetSearch" placeholder="옷 검색" style="margin-left:8px; width:120px; display:none;">
+            <div id="closetList" class="card-list" style="display: none;"></div>
+        </div>
+        <div>
+            <b>추천코디 첨부:</b>
+            <button type="button" id="toggleRecoBtn" style="margin-left:8px;">▼ 펼치기</button>
+            <input type="text" id="recoSearch" placeholder="코디 검색" style="margin-left:8px; width:120px; display:none;">
+            <div id="recoList" class="card-list" style="display:none;"></div>
+        </div>
+        <input type="hidden" id="selectedRecoIdx">
+        <br>
+        <button type="submit">글 작성</button>
+    </form>
+    <button type="button" id="friendSearchBtn" style="margin-left:16px;">친구 검색</button>
+    <hr>
+    <div id="posts"></div>
+
+    <div class="modal-bg" id="friendSearchModal">
+        <div class="modal">
+            <h3>친구 검색</h3>
+            <input type="text" id="friendSearchInput" placeholder="닉네임을 입력하세요" autocomplete="off" />
+            <div class="search-result" id="friendSearchResult"></div>
+            <div style="margin-top:16px;">
+                <button type="button" onclick="closeFriendSearch()">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let myUid = null;
+        let closetList = [];
+        let recoList = [];
+        let recoListFiltered = [];
+        let selectedClosetIdxs = [];
+        let maxCloset = 4;
+        let maxImage = 4;
+
+        function getJwt() {
+            return localStorage.getItem('jwt');
+        }
+
+        // =========================================================================
+        // 🚨 [핵심 복구] atob() 함수 정의 및 fetchMyUid 함수 (local JWT 디코딩)
+        // =========================================================================
+        if (typeof atob === 'undefined' || typeof btoa === 'undefined') {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+            window.atob = (input) => {
+                let str = input.replace(/=+$/, '');
+                let output = '';
+                if (str.length % 4 == 1) { throw new Error("'atob' failed: The string to be decoded is not correctly encoded."); }
+                for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 * 6) && (output += chars.charAt(255 & buffer >> 6 - bs)) ? bc++ : 0) {
+                    buffer = chars.indexOf(buffer);
+                }
+                return output;
+            };
+        }
+
+        async function fetchMyUid() {
+            const jwt = getJwt();
+            if (!jwt) return null;
+            try {
+                const parts = jwt.split('.');
+                if (parts.length !== 3) { return null; }
+                const payload = JSON.parse(atob(parts[1]));
+                return payload.sub || null;
+            } catch (e) {
+                console.error("[JS ERROR] Local JWT decoding failed:", e);
+            }
+            return null;
+        }
+
+        function renderRecommended(reco) {
+            if (!reco || typeof reco !== 'object') return '';
+            let html = '';
+
+            const items = [
+                { key: 'top', label: '상의' },
+                { key: 'bottom', label: '하의' },
+                { key: 'outer', label: '아우터' }
+            ];
+
+            html += '<div><b>첨부 코디 아이템:</b></div>';
+
+            items.forEach(itemInfo => {
+                const item = reco[itemInfo.key];
+                if (item && item.type !== 'none') {
+                    const url = item.url || item.base64Image;
+                    html += `<div style="font-size:12px; margin-top:4px; margin-left:10px;">
+                                <b>${itemInfo.label}:</b> ${item.color || ''} ${item.type || ''} (${item.material || ''})
+                                ${url ? `<br><img src="${url}" class="reco-img">` : ''}
+                            </div>`;
+                }
+            });
+
+            return html;
+        }
+        // =========================================================================
+
+        document.getElementById('friendSearchBtn').onclick = function() {
+            document.getElementById('friendSearchModal').style.display = 'flex';
+            document.getElementById('friendSearchInput').value = '';
+            document.getElementById('friendSearchResult').innerHTML = '';
+        };
+        function closeFriendSearch() {
+            document.getElementById('friendSearchModal').style.display = 'none';
+        }
+
+        document.getElementById('friendSearchInput').addEventListener('input', async function() {
+            const keyword = this.value.trim();
+            const jwt = getJwt();
+            if (!keyword) {
+                document.getElementById('friendSearchResult').innerHTML = '';
+                return;
+            }
+            const res = await fetch(`/community/search_friend?nickname=${encodeURIComponent(keyword)}`, {
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) {
+                const results = await res.json();
+                if (!Array.isArray(results) || results.length === 0) {
+                    document.getElementById('friendSearchResult').innerHTML = '<div>검색 결과 없음</div>';
+                } else {
+                    document.getElementById('friendSearchResult').innerHTML = results.map(user => {
+                        // 백엔드 'search_friend'가 반환하는 필드명 사용
+                        const imgTag = user.profileImage
+                            ? `<img src="${user.profileImage}" style="width:32px;height:32px;border-radius:50%;margin-right:8px;object-fit:cover;">`
+                            : `<span class="default-profile-icon" style="width:32px;height:32px;display:inline-block;margin-right:8px;">
+                                    <svg viewBox="0 0 24 24" fill="#bbb" width="32" height="32">
+                                        <circle cx="12" cy="8" r="4"/>
+                                        <path d="M4 20c0-4 8-4 8-4s8 0 8 4v2H4v-2z"/>
+                                    </svg>
+                                </span>`;
+                        return `<div class="search-item">
+                            <span onclick="goToProfile('${user.userId}')">${imgTag}<span class="search-nick">${user.userName || user.userId}</span></span>
+                            <button class="search-btn" onclick="addFriendByNickname('${user.userName}')">추가</button>
+                            <button class="search-btn" onclick="deleteFriendByNickname('${user.userName}')">삭제</button>
+                        </div>`;
+                    }).join('');
+                }
+            } else {
+                const data = await res.json();
+                alert('검색 실패: ' + (data.error || '백엔드 오류'));
+            }
+        });
+
+        async function addFriendByNickname(nickname) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const res = await fetch('/community/add_friend_by_nickname', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname })
+            });
+            if (res.ok) {
+                alert('친구 추가 완료!');
+            } else {
+                const data = await res.json();
+                alert(data.error || '친구 추가 실패');
+            }
+        }
+
+        async function deleteFriendByNickname(nickname) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const res = await fetch('/community/delete_friend_by_nickname', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname })
+            });
+            if (res.ok) {
+                alert('친구 삭제 완료!');
+            } else {
+                const data = await res.json();
+                alert(data.error || '친구 삭제 실패');
+            }
+        }
+
+        async function fetchClosetAndReco() {
+            const jwt = getJwt();
+            if (!jwt) return;
+
+            const closetRes = await fetch('/upload/my_closet', {
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            const closetData = await closetRes.json();
+            closetList = closetData;
+            renderClosetList();
+
+            const recoRes = await fetch('/api/history/recommendations/all', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const recoData = await recoRes.json();
+            recoList = recoData.recommendations || [];
+            recoListFiltered = [];
+            renderRecoList();
+        }
+
+        function renderClosetList() {
+            const container = document.getElementById('closetList');
+            container.innerHTML = closetList.map((item, idx) => `
+                <div class="card-item${selectedClosetIdxs.includes(idx) ? ' selected' : ''}" id="closetCard${idx}" onclick="selectCloset(${idx})">
+                    ${item.url ? `<img src="${item.url}" class="closet-img"><br>` : ''}
+                    <span>${item.category || ''}</span><br>
+                </div>
+            `).join('');
+            document.getElementById('closetSelectedCount').textContent =
+                selectedClosetIdxs.length > 0 ? `선택됨: ${selectedClosetIdxs.length}/${maxCloset}` : '';
+        }
+
+        function selectCloset(idx) {
+            if (selectedClosetIdxs.includes(idx)) {
+                selectedClosetIdxs = selectedClosetIdxs.filter(i => i !== idx);
+            } else {
+                if (selectedClosetIdxs.length >= maxCloset) {
+                    alert(`최대 ${maxCloset}개까지 선택 가능합니다.`);
+                    return;
+                }
+                selectedClosetIdxs.push(idx);
+            }
+            renderClosetList();
+        }
+
+        function renderRecoList() {
+            const container = document.getElementById('recoList');
+            const list = recoListFiltered.length ? recoListFiltered : recoList;
+            container.innerHTML = list.map((r, idx) => {
+                let reco = r.recommended?.recommended || r.recommended || r;
+                if (typeof reco === 'string') {
+                    try { reco = JSON.parse(reco); } catch {}
+                }
+                let thumb = reco.top?.url ? `<img src="${reco.top.url}" class="reco-img"><br>` : '';
+                const realIdx = recoList.indexOf(r);
+                return `
+                    <div class="card-item${document.getElementById('selectedRecoIdx').value == realIdx ? ' selected' : ''}" id="recoCard${realIdx}" onclick="selectReco(${realIdx})">
+                        ${thumb}
+                        <span>${r.id}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectReco(idx) {
+            document.getElementById('selectedRecoIdx').value = idx;
+            recoList.forEach((_, i) => {
+                document.getElementById('recoCard'+i)?.classList.toggle('selected', i==idx);
+            });
+        }
+
+        document.getElementById('recoSearch').addEventListener('input', function() {
+            const q = this.value.trim();
+            if (!q) {
+                recoListFiltered = [];
+            } else {
+                recoListFiltered = recoList.filter(r =>
+                    (r.id && r.id.includes(q)) ||
+                    (JSON.stringify(r.recommended || r).includes(q))
+                );
+            }
+            renderRecoList();
+        });
+
+        document.getElementById('toggleRecoBtn').addEventListener('click', function() {
+            const list = document.getElementById('recoList');
+            const search = document.getElementById('recoSearch');
+            if (list.style.display === 'none') {
+                list.style.display = 'flex';
+                search.style.display = '';
+                this.textContent = '▲ 접기';
+                renderRecoList();
+            } else {
+                list.style.display = 'none';
+                search.style.display = 'none';
+                this.textContent = '▼ 펼치기';
+            }
+        });
+
+        document.getElementById('toggleClosetBtn').addEventListener('click', function() {
+            const list = document.getElementById('closetList');
+            const search = document.getElementById('closetSearch');
+            if (list.style.display === 'none') {
+                list.style.display = 'flex';
+                search.style.display = '';
+                this.textContent = '▲ 접기';
+                renderClosetList();
+            } else {
+                list.style.display = 'none';
+                search.style.display = 'none';
+                this.textContent = '▼ 펼치기';
+            }
+        });
+
+        async function fetchComments(postId) {
+            const jwt = getJwt();
+            const res = await fetch(`/community/posts/${postId}/comments`, {
+                headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+            });
+            const comments = await res.json();
+            return comments;
+        }
+
+        async function fetchReplies(postId, commentId) {
+            const jwt = getJwt();
+            const res = await fetch(`/community/posts/${postId}/comments/${commentId}/replies`, {
+                headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+            });
+            const replies = await res.json();
+            return replies;
+        }
+
+        async function deleteComment(postId, commentId) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            if (!confirm('정말 댓글을 삭제하시겠습니까?')) return;
+
+            const res = await fetch(`/community/posts/${postId}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+
+            if (res.ok) {
+                alert('댓글 삭제 완료!');
+                const commentsDiv = document.getElementById(`comments-${postId}`);
+                if (commentsDiv) renderComments(postId, commentsDiv);
+                fetchPosts();
+            } else {
+                const data = await res.json();
+                alert(data.error || '댓글 삭제 실패: 권한이 없거나 댓글이 존재하지 않습니다.');
+            }
+        }
+
+        async function deleteReply(postId, commentId, replyId) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            if (!confirm('정말 대댓글을 삭제하시겠습니까?')) return;
+
+            const res = await fetch(`/community/posts/${postId}/comments/${commentId}/replies/${replyId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+
+            if (res.ok) {
+                alert('대댓글 삭제 완료!');
+                const repliesDiv = document.getElementById(`replies-${commentId}`);
+                if (repliesDiv) renderReplies(postId, commentId, repliesDiv);
+                fetchPosts();
+            } else {
+                const data = await res.json();
+                alert(data.error || '대댓글 삭제 실패: 권한이 없거나 대댓글이 존재하지 않습니다.');
+            }
+        }
+
+        async function renderReplies(postId, commentId, container) {
+            const replies = await fetchReplies(postId, commentId);
+            container.innerHTML = replies.map(r => {
+                const deleteBtn = (myUid && r.user_id === myUid)
+                    ? `<button onclick="deleteReply('${postId}', '${commentId}', '${r.id}')" style="margin-left:8px; font-size:12px;">삭제</button>`
+                    : '';
+
+                const nickname = r.nickname || r.user_id || 'Unknown';
+                const dateStr = r.created_at && r.created_at.seconds ? new Date(r.created_at.seconds*1000).toLocaleString() : (r.created_at || '');
+
+                return `<div class="reply-item">
+                    <b>${nickname}</b>
+                    <small>${dateStr}</small>${deleteBtn}<br>
+                    ${r.content}
+                </div>`;
+            }).join('');
+        }
+
+        async function submitReply(e, postId, commentId) {
+            e.preventDefault();
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const content = e.target.replyContent.value.trim();
+            if (!content) return alert('대댓글 내용을 입력하세요.');
+            const res = await fetch(`/community/posts/${postId}/comments/${commentId}/replies`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content })
+            });
+            if (res.ok) {
+                e.target.replyContent.value = '';
+                const repliesDiv = document.getElementById(`replies-${commentId}`);
+                if (repliesDiv) renderReplies(postId, commentId, repliesDiv);
+                fetchPosts();
+            } else {
+                alert('대댓글 작성 실패');
+            }
+        }
+
+        async function renderComments(postId, container) {
+            const comments = await fetchComments(postId);
+            container.innerHTML = comments.map(c => {
+                const deleteBtn = (myUid && c.user_id === myUid)
+                    ? `<button onclick="deleteComment('${postId}', '${c.id}')" style="margin-left:8px; font-size:12px;">삭제</button>`
+                    : '';
+
+                const nickname = c.nickname || c.user_id || 'Unknown';
+                const dateStr = c.created_at && c.created_at.seconds ? new Date(c.created_at.seconds*1000).toLocaleString() : (c.created_at || '');
+
+                return `<div class="comment-item">
+                    <span class="comment-nick">${nickname}</span>
+                    <span class="comment-date">${dateStr}</span>${deleteBtn}<br>
+                    ${c.content}
+                    <form onsubmit="submitReply(event, '${postId}', '${c.id}')">
+                        <input type="text" name="replyContent" placeholder="대댓글 작성" style="width:50%;">
+                        <button type="submit">대댓글 등록</button>
+                    </form>
+                    <div id="replies-${c.id}" style="margin-top:8px;"></div>
+                </div>`;
+            }).join('');
+
+            comments.forEach(c => {
+                const repliesDiv = document.getElementById(`replies-${c.id}`);
+                if (repliesDiv) renderReplies(postId, c.id, repliesDiv);
+            });
+        }
+
+        async function submitComment(e, postId) {
+            e.preventDefault();
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const content = e.target.commentContent.value.trim();
+            if (!content) return alert('댓글 내용을 입력하세요.');
+            const res = await fetch(`/community/posts/${postId}/comments`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content })
+            });
+            if (res.ok) {
+                e.target.commentContent.value = '';
+                const commentsDiv = document.getElementById(`comments-${postId}`);
+                if (commentsDiv) renderComments(postId, commentsDiv);
+                fetchPosts();
+            } else {
+                alert('댓글 작성 실패');
+            }
+        }
+
+        function renderClosetItem(items) {
+            if (!items || items.length === 0) return '';
+            if (!Array.isArray(items)) items = [items];
+            return items.map(item => {
+                if (typeof item === 'object' && item.url) {
+                    let html = `<div>첨부 옷장 이미지: ${item.category || ''}`;
+                    html += `<br><img src="${item.url}" class="closet-img">`;
+                    html += '</div>';
+                    return html;
+                }
+                if (typeof item === 'object') {
+                    let html = `<div>첨부 옷장 이미지: ${item.category || ''}</div>`;
+                    return html;
+                }
+                return `<div>첨부 옷장 이미지: ${item}</div>`;
+            }).join('');
+        }
+
+        function renderImageUrls(urls) {
+            if (!urls || urls.length === 0) return '';
+            if (!Array.isArray(urls)) { return ''; }
+            return urls.map(url =>
+                `<img src="${url}" class="post-img">`
+            ).join('');
+        }
+
+        async function toggleLike(postId) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const res = await fetch(`/community/posts/${postId}/like`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) {
+                fetchPosts();
+            } else {
+                alert('좋아요 실패');
+            }
+        }
+
+        async function goToProfile(userId) {
+            window.location.href = `/community/profile/${userId}`;
+        }
+
+        async function sharePost(postId) {
+            const jwt = getJwt();
+            if (!jwt) return alert('로그인 필요');
+            const res = await fetch(`/community/posts/${postId}/share`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.url) {
+                    await navigator.clipboard.writeText(data.url);
+                    alert(`공유 URL이 복사되었습니다!\n${data.url}`);
+                } else {
+                    alert('공유 완료! (URL 없음)');
+                }
+            } else {
+                alert('공유 실패');
+            }
+        }
+
+        async function deletePost(postId) {
+            const jwt = getJwt();
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            const res = await fetch(`/community/posts/${postId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) {
+                alert('삭제되었습니다.');
+                fetchPosts();
+            } else {
+                alert('삭제 실패');
+            }
+        }
+
+        function editPostPrompt(postId, content) {
+            const newContent = prompt('수정할 내용을 입력하세요:', decodeURIComponent(content));
+            if (newContent !== null) editPost(postId, newContent);
+        }
+
+        async function editPost(postId, content) {
+            const jwt = getJwt();
+            const res = await fetch(`/community/posts/${postId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content })
+            });
+            if (res.ok) {
+                alert('수정되었습니다.');
+                fetchPosts();
+            } else {
+                alert('수정 실패');
+            }
+        }
+
+        async function fetchPosts() {
+            const jwt = getJwt();
+            if (!myUid) {
+                myUid = await fetchMyUid();
+            }
+
+            try {
+                const res = await fetch('/community/posts', {
+                    headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+                });
+                const posts = await res.json();
+
+                if (!Array.isArray(posts) || posts.length === 0) {
+                    document.getElementById('posts').innerHTML = '<div>게시물이 없습니다.</div>';
+                    return;
+                }
+
+                try {
+                    document.getElementById('posts').innerHTML = posts.map(p => {
+                        let btns = '';
+                        if (myUid && p.user_id && (p.user_id === myUid)) {
+                            btns = `<button onclick="editPostPrompt('${p.id}', '${encodeURIComponent(p.content || '')}')">수정</button><button onclick="deletePost('${p.id}')">삭제</button>`;
+                        }
+
+                        let shareBtn = `<button onclick="sharePost('${p.id}')">공유</button>`;
+
+                        let imgHtml = renderImageUrls(p.image_urls || []);
+                        let closetHtml = renderClosetItem(p.closet_items || []);
+                        let recoHtml = '';
+                        if (p.reco_item) {
+                            let reco = p.reco_item.recommended?.recommended || p.reco_item.recommended || p.reco_item;
+                            if (typeof reco === 'string') { try { reco = JSON.parse(reco); } catch {} }
+                            recoHtml = `<div>첨부 추천코디:<br>${renderRecommended(reco)}</div>`;
+                        }
+
+                        let profileImgHtml = p.profile_image ? `<span onclick="goToProfile('${p.user_id || ''}')" style="cursor:pointer;"><img src="${p.profile_image}" alt="프로필" class="profile-img"></span>` : `<span class="default-profile-icon" onclick="goToProfile('${p.user_id || ''}')" style="cursor:pointer;"><svg viewBox="0 0 24 24" fill="#bbb" width="32" height="32"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 8-4 8-4s8 0 8 4v2H4v-2z"/></svg></span>`;
+                        let nicknameHtml = `<a href="javascript:goToProfile('${p.user_id || ''}')" style="text-decoration:none;color:inherit;">${p.nickname || p.user_id || 'Unknown User'}</a>`;
+
+                        let likeBtn = `<button class="like-btn" onclick="toggleLike('${p.id}')"><span class="like-heart ${p.liked_by_me ? 'liked' : 'unliked'}">&#10084;</span><span>${p.likes_count || 0}</span><span style="font-size:14px; margin-left:8px;">댓글: ${p.comment_count || 0}</span></button>`;
+
+                        const createdAtStr = p.created_at && p.created_at.seconds ? new Date(p.created_at.seconds*1000).toLocaleString() : p.created_at || '';
+
+                        return `<div style="border:1px solid #ccc;margin:8px;padding:8px;">
+                                    <b>${profileImgHtml}${nicknameHtml}</b> <small>${createdAtStr}</small>${btns}${shareBtn}<br>
+                                    <span id="content-${p.id}">${p.content || ''}</span>
+                                    <br>${imgHtml}${closetHtml}${recoHtml}${likeBtn}
+                                    <div class="comment-box">
+                                        <form onsubmit="submitComment(event, '${p.id}')">
+                                            <input type="text" name="commentContent" placeholder="댓글 작성" style="width:60%;">
+                                            <button type="submit">댓글 등록</button>
+                                        </form>
+                                        <div id="comments-${p.id}" style="margin-top:8px;"></div>
+                                    </div>
+                                </div>`;
+                    }).join('');
+
+                    posts.forEach(p => {
+                        const commentsDiv = document.getElementById(`comments-${p.id}`);
+                        if (commentsDiv) renderComments(p.id, commentsDiv);
+                    });
+
+                } catch (renderingError) {
+                    console.error("[JS FATAL ERROR] Rendering failed due to data structure issue:", renderingError);
+                    document.getElementById('posts').innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red;">❌ 렌더링 중단: 오류: ${renderingError.name || 'Unknown Error'}</div>`;
+                }
+            } catch (networkError) {
+                console.error("[JS FATAL ERROR] Fetching posts failed:", networkError);
+                document.getElementById('posts').innerHTML = '<div>네트워크 오류로 게시물을 불러올 수 없습니다.</div>';
+            }
+        }
+
+        document.getElementById('postForm').onsubmit = async e => {
+            e.preventDefault();
+            const jwt = getJwt();
+            const content = document.getElementById('content').value;
+            const imageInput = document.getElementById('image');
+            const recoIdx = document.getElementById('selectedRecoIdx').value;
+            if (!jwt) return alert('로그인 필요');
+
+            if (!content.trim()) {
+                alert('내용을 입력하세요.');
+                return;
+            }
+
+            let imageUrls = [];
+
+            if (imageInput.files.length > 0) {
+                if (imageInput.files.length > maxImage) {
+                    alert(`이미지는 최대 ${maxImage}개까지 첨부 가능합니다.`);
+                    return;
+                }
+                for (let i = 0; i < imageInput.files.length; i++) {
+                    const formData = new FormData();
+                    formData.append('image', imageInput.files[i]);
+                    const res = await fetch('/community/upload_image', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + jwt },
+                        body: formData
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        imageUrls.push(data.url);
+                    } else {
+                        alert('이미지 업로드 실패');
+                        return;
+                    }
+                }
+            }
+
+            const closetItems = selectedClosetIdxs.map(idx => closetList[idx]);
+            const recoItem = recoIdx ? recoList[recoIdx] : null;
+
+            const res = await fetch('/community/posts', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                // 🚨 수정된 부분: 'content' 대신 백엔드가 기대하는 'description' 필드로 전송
+                body: JSON.stringify({ description: content, image_urls: imageUrls, closet_items: closetItems, reco_item: recoItem })
+            });
+            if (res.ok) {
+                document.getElementById('content').value = '';
+                imageInput.value = '';
+                selectedClosetIdxs = [];
+                document.getElementById('closetSelectedCount').textContent = '';
+                document.getElementById('selectedRecoIdx').value = '';
+                closetList.forEach((_, i) => document.getElementById('closetCard'+i)?.classList.remove('selected'));
+                recoList.forEach((_, i) => document.getElementById('recoCard'+i)?.classList.remove('selected'));
+                fetchPosts();
+            } else {
+                alert('글 작성 실패');
+            }
+        };
+
+        window.selectCloset = selectCloset;
+        window.selectReco = selectReco;
+        window.submitComment = submitComment;
+        window.submitReply = submitReply;
+        window.toggleLike = toggleLike;
+        window.goToProfile = goToProfile;
+        window.sharePost = sharePost;
+        window.deleteComment = deleteComment;
+        window.deleteReply = deleteReply;
+        window.deletePost = deletePost;
+        window.editPostPrompt = editPostPrompt;
+
+        window.onload = async () => {
+            myUid = await fetchMyUid();
+            await fetchClosetAndReco();
+            fetchPosts();
+        };
+    </script>
+</body>
+</html>

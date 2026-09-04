@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>사용자 정보 수정</title>
+</head>
+<body>
+    <h2>사용자 정보 수정</h2>
+    <form id="editForm">
+        <label>새 닉네임:</label>
+        <input type="text" id="nickname" placeholder="새 닉네임을 입력하세요"><br>
+        <label>새 비밀번호:</label>
+        <input type="password" id="password" placeholder="새 비밀번호를 입력하세요"><br>
+        <button type="submit">수정하기</button>
+    </form>
+    <div id="result" style="margin-top: 20px;"></div>
+
+    <script>
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const nickname = document.getElementById('nickname').value;
+            const password = document.getElementById('password').value;
+
+            const token = localStorage.getItem('jwt'); // JWT 토큰 가져오기
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const payload = {};
+            if (nickname) payload.nickname = nickname;
+            if (password) payload.password = password;
+
+            const response = await fetch('/user/edit', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            const resultDiv = document.getElementById('result');
+            if (response.ok) {
+                resultDiv.innerHTML = `<p>${result.message}</p>`;
+            } else {
+                resultDiv.innerHTML = `<p style="color: red;">${result.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

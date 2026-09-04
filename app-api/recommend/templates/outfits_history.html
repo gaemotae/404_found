@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>추천코디 히스토리</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        h2 { margin-bottom: 20px; }
+        .reco-card {
+            border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0;
+            background: #fafafa; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .reco-meta { font-size: 13px; color: #555; margin-bottom: 8px; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { margin-bottom: 8px; }
+        img { max-width: 100px; border: 1px solid #ddd; border-radius: 4px; margin-top: 4px; }
+        .delete-btn {
+            background: #e74c3c; color: #fff; border: none; border-radius: 4px;
+            padding: 6px 12px; cursor: pointer; margin-top: 12px;
+        }
+        .delete-btn:hover { background: #c0392b; }
+    </style>
+</head>
+<body>
+    <h2>추천코디 히스토리 (오늘과 같은 날짜의 이전 코디)</h2>
+    <div id="recoList"></div>
+    <script>
+        async function loadHistory() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/login';
+                return;
+            }
+            const res = await fetch('/api/history/recommendations/same_day', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            const data = await res.json();
+            const list = data.recommendations || [];
+            const container = document.getElementById('recoList');
+            container.innerHTML = '';
+            if (list.length === 0) {
+                container.innerHTML = '<p>이전 추천코디가 없습니다.</p>';
+                return;
+            }
+            list.forEach(item => {
+                const rec = item.recommended || {};
+                const newRec = item.new_recommend || null;
+
+                // 조건 적용: new_recommend 있으면 그걸, 없으면 recommended
+                const targetRec = newRec ? newRec : rec;
+                const label = newRec ? "코멘트 반영 추천" : "원래 추천";
+
+                container.innerHTML += `
+                    <div class="reco-card">
+                        <div class="reco-meta">
+                            <b>${item.year}년 ${item.id.slice(5, 10).replace('-', '월 ')}일</b> - ${label}
+                        </div>
+                        ${renderReco(targetRec)}
+                        <button class="delete-btn" onclick="deleteReco('${item.id}')">삭제</button>
+                    </div>
+                `;
+            });
+        }
+
+        function renderReco(rec) {
+            let html = '<ul>';
+            ['top', 'bottom', 'outer'].forEach(key => {
+                if (rec[key]) {
+                    html += `<li><b>${key}:</b> `;
+                    if (typeof rec[key] === 'object' && rec[key] !== null && rec[key].url) {
+                        html += `${rec[key].category || ''} (${rec[key].filename || ''})<br>`;
+                        html += `<img src="${rec[key].url}" alt="${rec[key].category || key}">`;
+                    } else {
+                        html += JSON.stringify(rec[key]);
+                    }
+                    html += '</li>';   // ✅ 수정됨
+                }
+            });
+            html += '</ul>';
+            return html;
+        }
+
+        async function deleteReco(docId) {
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            const jwt = localStorage.getItem('jwt');
+            const res = await fetch('/api/history/recommendations/delete', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ doc_id: docId })
+            });
+            if (res.ok) {
+                alert('삭제 성공!');
+                loadHistory();
+            } else {
+                alert('삭제 실패');
+            }
+        }
+
+        window.onload = loadHistory;
+    </script>
+</body>
+</html>

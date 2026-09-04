@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ user.nickname or user.userId }}님의 프로필</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 20px; background-color: #f8f8f8; }
+        .profile-container { max-width: 600px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); }
+        .profile-header { display: flex; align-items: center; margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .profile-img {
+            width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+            margin-right: 20px; border: 3px solid #007bff;
+        }
+        .user-info h2 { margin: 0; font-size: 1.8em; color: #333; }
+        .user-info p { margin: 4px 0 0; color: #777; font-size: 0.9em; }
+        .bio-text { margin-top: 15px; padding: 10px 0; border-top: 1px dashed #eee; font-size: 1em; color: #555; }
+        .stats-bar { display: flex; justify-content: space-around; text-align: center; margin: 15px 0; background: #f3f3f3; padding: 10px; border-radius: 8px; }
+        .stat-item { font-size: 1.1em; }
+        .stat-item b { display: block; font-size: 1.3em; color: #007bff; }
+        .action-buttons { margin-top: 20px; display: flex; gap: 10px; }
+        .action-buttons button { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
+        #followBtn { background-color: #007bff; color: white; }
+        #followBtn.unfollow { background-color: #ccc; color: #333; }
+        #blockUserBtn, #unblockUserBtn { background-color: #e74c3c; color: white; }
+        .post-item { border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 10px; background: #fff; }
+        .post-date { font-size: 0.8em; color: #999; margin-bottom: 5px; display: block; }
+        .post-content { color: #333; }
+        .friend-list { list-style: none; padding: 0; }
+        .friend-list li { background: #f3f9ff; margin-bottom: 5px; padding: 8px; border-left: 5px solid #007bff; border-radius: 4px; }
+        .default-profile-icon {
+            width: 80px; height: 80px; border-radius: 50%; background: #eee; display: flex; align-items: center; justify-content: center;
+            border: 3px solid #007bff; margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="profile-container">
+    <div class="profile-header">
+        {% if user.profileImage %}
+            <img src="{{ user.profileImage }}" alt="프로필 이미지" class="profile-img">
+        {% else %}
+            <div class="default-profile-icon">
+                <svg viewBox="0 0 24 24" fill="#bbb" width="50" height="50">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4 8-4 8-4s8 0 8 4v2H4v-2z"/>
+                </svg>
+            </div>
+        {% endif %}
+
+        <div class="user-info">
+            <h2>{{ user.nickname or user.userId }}</h2>
+            <p>@{{ user.userId }}</p>
+            <p>가입일: {{ created_at }}</p>
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item"><b>{{ user.postCount or 0 }}</b> 게시물</div>
+        <div class="stat-item"><b>{{ user.followerCount or 0 }}</b> 팔로워</div>
+        <div class="stat-item"><b>{{ user.followingCount or 0 }}</b> 팔로잉</div>
+    </div>
+
+    <div class="bio-text">
+        {{ user.bio or '자기소개가 없습니다.' }}
+    </div>
+
+    <div class="action-buttons">
+        {% if current_user_id and user.userId != current_user_id %}
+
+            {% if not is_blocked %}
+                <button
+                    id="followBtn"
+                    onclick="handleFollowUnfollow('{{ user.isFollowing | lower }}')"
+                    class="{{ 'unfollow' if user.isFollowing else '' }}"
+                >
+                    {{ '언팔로우' if user.isFollowing else '팔로우' }}
+                </button>
+                <span id="followStatus"></span>
+
+                <button id="blockUserBtn" onclick="handleBlockUnblock('block')">차단하기</button>
+            {% else %}
+                <button id="unblockUserBtn" onclick="handleBlockUnblock('unblock')">차단 해제하기</button>
+                <span id="blockStatus"></span>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <h3>게시물 ({{ user.postCount or 0 }}개)</h3>
+    {% for post in posts %}
+        <div class="post-item">
+            <span class="post-date">{{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at.strftime else post.created_at }}</span>
+            <p class="post-content">{{ post.content }}</p>
+        </div>
+    {% else %}
+        <div>게시물이 없습니다.</div>
+    {% endfor %}
+
+    <h3>팔로우 중인 사용자 ({{ user.followingCount or 0 }}명)</h3>
+    <ul class="friend-list">
+        {% for friend in friends %}
+            <li>{{ friend.nickname }} ({{ friend.email or '이메일 없음' }})</li>
+        {% else %}
+            <li>친구가 없습니다.</li>
+        {% endfor %}
+    </ul>
+
+    <a href="/community" style="display:block; margin-top:20px;">← 커뮤니티로 돌아가기</a>
+</div>
+
+<script>
+    const PROFILE_ID = "{{ user.userId }}";
+    const IS_FOLLOWING = "{{ user.isFollowing | lower }}" === 'true';
+
+    function getJwt() {
+        return localStorage.getItem('jwt');
+    }
+
+    /**
+     * 팔로우/언팔로우 기능을 통합 처리하는 함수
+     */
+    async function handleFollowUnfollow(currentStatus) {
+        const jwt = getJwt();
+        if (!jwt) {
+            alert('로그인 필요');
+            return;
+        }
+
+        const endpoint = currentStatus === 'true' ? '/community/delete_friend_by_nickname' : '/community/add_friend_by_nickname';
+        const action = currentStatus === 'true' ? '언팔로우' : '팔로우';
+        const statusElement = document.getElementById('followStatus');
+        const buttonElement = document.getElementById('followBtn');
+
+        statusElement.textContent = `${action} 처리 중...`;
+        buttonElement.disabled = true; // 중복 클릭 방지
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ nickname: "{{ user.nickname }}" })
+            });
+
+            if (res.ok) {
+                alert(`${action} 완료!`);
+                location.reload();
+            } else {
+                buttonElement.disabled = false;
+                const errorData = await res.json();
+                statusElement.textContent = `${action} 실패: ${errorData.error || '오류 발생'}`;
+            }
+        } catch (error) {
+            buttonElement.disabled = false;
+            statusElement.textContent = '네트워크 오류 발생!';
+            console.error('Follow/Unfollow Error:', error);
+        }
+    }
+
+
+    /**
+     * 차단 및 차단 해제 기능을 통합 처리하는 함수
+     */
+    async function handleBlockUnblock(action) {
+        const jwt = getJwt();
+        if (!jwt) {
+            alert('로그인 필요');
+            return;
+        }
+
+        const endpoint = action === 'block' ? `/community/block_user` : `/community/unblock_user`;
+        const statusId = 'blockStatus';
+        const buttonId = action === 'block' ? 'blockUserBtn' : 'unblockUserBtn';
+        const successMessage = action === 'block' ? '계정 차단 완료!' : '차단 해제 완료!';
+        const failureMessage = action === 'block' ? '차단 실패!' : '차단 해제 실패!';
+
+        const statusElement = document.getElementById(statusId);
+        const buttonElement = document.getElementById(buttonId);
+
+        statusElement.textContent = `${action} 처리 중...`;
+        buttonElement.disabled = true; // 중복 클릭 방지
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + jwt,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ user_id: PROFILE_ID })
+            });
+
+            if (res.ok) {
+                alert(successMessage);
+                location.reload();
+            } else {
+                buttonElement.disabled = false;
+                const errorData = await res.json();
+                document.getElementById(statusId).textContent = failureMessage + (errorData.error ? `: ${errorData.error}` : '');
+            }
+        } catch (error) {
+            buttonElement.disabled = false;
+            document.getElementById(statusId).textContent = '네트워크 오류 발생!';
+            console.error('Block/Unblock Error:', error);
+        }
+    }
+
+    // 전역으로 함수 등록
+    window.handleBlockUnblock = handleBlockUnblock;
+    window.handleFollowUnfollow = handleFollowUnfollow;
+</script>
+</body>
+</html>

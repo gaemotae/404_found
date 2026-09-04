@@ -1,19 +1,39 @@
-# 가상환경
+# Python virtual environments
+.venv/
 venv/
+env/
 
-# 캐시
+# Python caches and test output
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.validation-venv/
+.coverage
+htmlcov/
 
-# DB 파일
-db.sqlite3
-
-# 환경 파일
+# Local configuration and credentials
 .env
+.env.*
+!.env.example
+serviceAccountKey.json
+firebase_credentials.json
+google-services.json
+*.pem
+*.key
 
-# IDE 설정
-.vscode/
+# Local databases and user uploads
+*.sqlite3
+db.sqlite3
+uploads/
+
+# IDE and operating-system files
 .idea/
+.vscode/
+.DS_Store
+Thumbs.db
 
-# 로그 파일
+# Runtime output
 *.log
+*.pid

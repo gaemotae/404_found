@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>업로드 성공</title>
+</head>
+<body>
+    <h1>업로드 성공!</h1>
+    <img src="{{ image_url }}" width="300"><br><br>
+    <a href="/upload">다른 이미지 업로드</a><br><br>
+    <button id="viewMyImages">내 이미지 보기</button>
+
+    <div id="images" style="margin-top:20px;"></div>
+
+    <script>
+        document.getElementById('viewMyImages').addEventListener('click', async () => {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) {
+                alert('먼저 로그인하세요.');
+                return;
+            }
+
+            const response = await fetch('/upload/my_images', {
+                headers: {'Authorization': 'Bearer ' + jwt}
+            });
+            const result = await response.json();
+
+            const imagesDiv = document.getElementById('images');
+            imagesDiv.innerHTML = '<h3>내 이미지 목록</h3>';
+            result.images.forEach(img => {
+                imagesDiv.innerHTML += `
+                    <p>${img.category} - ${img.filename}</p>
+                    <img src="${img.url}" width="200"><br>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>

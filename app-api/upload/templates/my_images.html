@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>내 이미지 보기</title>
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; margin: 40px; }
+        h2 { margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+        .card {
+            border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px;
+            background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        }
+        .thumb { width: 100%; height: 180px; object-fit: cover; border-radius: 6px; border: 1px solid #eee; }
+        .meta { font-size: 13px; color: #444; margin-top: 10px; line-height: 1.7; }
+        .row { display:flex; gap:8px; margin-top:10px; }
+        .btn { padding: 6px 12px; border: 0; border-radius: 6px; cursor: pointer; }
+        .btn-danger { background:#e74c3c; color:#fff; }
+        .btn-primary { background:#3498db; color:#fff; }
+        .pill { display:inline-block; background:#f3f4f6; border:1px solid #e5e7eb; padding:2px 8px; border-radius:999px; margin-right:6px; font-size:12px; }
+        .muted { color:#6b7280; font-size:12px; }
+    </style>
+</head>
+<body>
+    <h2>내 이미지 목록</h2>
+    <div id="imageList" class="grid"></div>
+
+    <script>
+        // 영문 카테고리 → 한글
+        const categoryKo = {
+            'blazer':'블레이저','cardigan':'가디건','coat':'코트','cotton pants':'코튼 팬츠',
+            'denim':'데님','dress':'드레스','hood':'후드','hoodzip':'후드집업','fleece':'플리스',
+            'jumper':'점퍼','longpedding':'롱패딩','shortpedding':'숏패딩','longsleeve':'긴소매',
+            'shortsleeve':'반소매','sleeveless':'민소매','shirt':'셔츠','sweater':'스웨터',
+            'shorts':'반바지','slacks':'슬랙스','skirt':'스커트','trainingpants':'트레이닝 팬츠'
+        };
+        // 영문 색상 → 한글
+        const colorKo = {
+            'Beige':'베이지','Black':'검정','Blue':'파랑','Brown':'갈색','Gray':'회색','Green':'초록',
+            'Orange':'주황','Pink':'분홍','Purple':'보라','Red':'빨강','White':'하양','Yellow':'노랑'
+        };
+        // ✅ 사용자 요청 반영: 표준 소재 목록 업데이트 (백엔드와 일치)
+        const STANDARD_MATERIALS = [
+            "면", "데님", "린넨/마", "가죽", "퍼/털", "시폰/얇은 원단",
+            "실크/새틴", "스판덱스/스포츠 원단", "나일론/방수",
+            "울/정장소재", "니트/스웨터소재", "벨벳", "트위드"
+        ];
+
+        function toKoCategory(val){ return val ? (categoryKo[val] || val) : '-'; }
+        function toKoColors(arr){ return Array.isArray(arr)&&arr.length ? arr.map(c=>colorKo[c]||c).join(', ') : '-'; }
+        function safe(v){ if(v===undefined||v===null) return '-'; const s=String(v).trim(); return s||'-'; }
+
+        async function loadImages() {
+            const jwt = localStorage.getItem('jwt');
+            if (!jwt) { alert('로그인이 필요합니다.'); location.href='/login'; return; }
+
+            const res = await fetch('/upload/my_images', { headers:{Authorization:'Bearer '+jwt} });
+            if (!res.ok) { alert('이미지를 불러오지 못했습니다.'); return; }
+            const data = await res.json();
+            const list = Array.isArray(data.images) ? data.images : [];
+
+            const container = document.getElementById('imageList');
+            container.innerHTML = '';
+            if (!list.length) { container.innerHTML = '<p class="muted">등록된 이미지가 없습니다.</p>'; return; }
+
+            list.forEach(img => {
+                const categoryRaw = img.category || img.clothing_type || '';
+                const materialRaw = img.material || '';
+                const typeRaw = img.type || '';
+                const colorsArr = Array.isArray(img.colors) ? img.colors : [];
+
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <img class="thumb" src="${img.url}" alt="의류 이미지" />
+                    <div class="meta">
+                        <div><strong>대분류:</strong> ${safe(typeRaw)}</div>
+                        <div><strong>의류 종류:</strong> ${toKoCategory(categoryRaw)}</div>
+                        <div><strong>소재:</strong> ${safe(materialRaw)}</div>
+                        <div><strong>색상:</strong> ${toKoColors(colorsArr)}</div>
+                        <div class="muted"><strong>업로드 시간:</strong> ${safe(img.uploaded_at)}</div>
+                    </div>
+                    <div class="row">
+                        <button class="btn btn-danger" data-act="del">삭제</button>
+                        <button class="btn btn-primary" data-act="edit">수정</button>
+                    </div>
+                    <div class="edit-wrap" style="margin-top:8px;"></div>
+                `;
+                container.appendChild(card);
+
+                // 버튼 바인딩
+                const delBtn = card.querySelector('[data-act="del"]');
+                const editBtn = card.querySelector('[data-act="edit"]');
+                const editWrap = card.querySelector('.edit-wrap');
+
+                delBtn.addEventListener('click', () => deleteImage(img.id));
+                editBtn.addEventListener('click', () => openEdit({
+                    id: img.id,
+                    categoryRaw,
+                    materialRaw,
+                    typeRaw,
+                    colorsArr,
+                    mountEl: editWrap
+                }));
+            });
+        }
+
+        // 수정 폼 열기
+        function openEdit({id, categoryRaw, materialRaw, typeRaw, colorsArr, mountEl}) {
+            const colorsSet = new Set(colorsArr || []);
+
+            // ✅ 소재 드롭다운 옵션 생성
+            const materialOptions = STANDARD_MATERIALS.map(m =>
+                `<option value="${m}" ${m===materialRaw?'selected':''}>${m}</option>`
+            ).join('');
+
+            mountEl.innerHTML = `
+                <div style="padding:10px; border:1px dashed #e5e7eb; border-radius:8px;">
+                    <div style="margin-bottom:8px;">
+                        <label>대분류:
+                            <select id="e-type-${id}">
+                                ${['','상의','하의','아우터','원피스'].map(t => `<option value="${t}" ${t===typeRaw?'selected':''}>${t||'- 선택 -'}</option>`).join('')}
+                            </select>
+                        </label>
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        <label>의류 종류(세부):
+                            <select id="e-category-${id}">
+                                ${Object.entries(categoryKo).map(([en,ko]) =>
+                                    `<option value="${en}" ${en===categoryRaw?'selected':''}>${ko}</option>`
+                                ).join('')}
+                            </select>
+                        </label>
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        <label>소재:
+                            <select id="e-material-${id}">
+                                <option value="">- 선택 -</option>
+                                ${materialOptions}
+                            </select>
+                        </label>
+                    </div>
+                    <div style="margin-bottom:8px;">
+                        <div>색상:</div>
+                        ${Object.entries(colorKo).map(([en,ko]) =>
+                            `<label class="pill"><input type="checkbox" data-color value="${en}" ${colorsSet.has(en)?'checked':''}/> ${ko}</label>`
+                        ).join('')}
+                    </div>
+                    <button class="btn btn-primary" id="e-save-${id}">저장</button>
+                </div>
+            `;
+
+            document.getElementById(`e-save-${id}`).addEventListener('click', () => saveEdit(id, mountEl));
+        }
+
+        // 수정 저장
+        async function saveEdit(id, mountEl) {
+            const jwt = localStorage.getItem('jwt');
+            const typeVal = document.getElementById(`e-type-${id}`).value;
+            const categoryVal = document.getElementById(`e-category-${id}`).value;
+            // 드롭다운에서 값을 가져옴
+            const materialVal = document.getElementById(`e-material-${id}`).value.trim();
+            const colorVals = Array.from(mountEl.querySelectorAll('input[data-color]:checked')).map(c=>c.value);
+
+            const fd = new FormData();
+            if (typeVal) fd.append('type', typeVal);
+            if (categoryVal) fd.append('category', categoryVal);
+            // 백엔드에서 검증을 위해 materialVal을 그대로 전송 (빈 값 포함)
+            fd.append('material', materialVal);
+            fd.append('colors', colorVals.join(','));
+
+            const res = await fetch(`/upload/edit_image/${id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + jwt },
+                body: fd
+            });
+            const js = await res.json();
+            if (res.ok) {
+                alert('수정 완료');
+                loadImages();
+            } else {
+                alert('수정 실패: ' + (js.error || 'unknown'));
+            }
+        }
+
+        // 삭제
+        async function deleteImage(id) {
+            const jwt = localStorage.getItem('jwt');
+            if (!confirm('정말 삭제하시겠습니까?')) return;
+            const res = await fetch(`/upload/delete_image/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + jwt }
+            });
+            if (res.ok) { alert('삭제 성공'); loadImages(); }
+            else { const js = await res.json(); alert('삭제 실패: ' + (js.error || 'unknown')); }
+        }
+
+        window.onload = loadImages;
+    </script>
+</body>
+</html>
