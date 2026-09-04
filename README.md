@@ -1,8 +1,10 @@
 # WEARTHER Backend
 
-[![Backend checks](https://github.com/gaemotae/404_found/actions/workflows/ci.yml/badge.svg)](https://github.com/gaemotae/404_found/actions/workflows/ci.yml)
+[![Backend checks](https://github.com/gaemotae/404_found/actions/workflows/ci.yml/badge.svg?branch=portfolio-backend-cleanup)](https://github.com/gaemotae/404_found/actions/workflows/ci.yml?query=branch%3Aportfolio-backend-cleanup)
 
 날씨와 사용자의 옷장 정보를 바탕으로 코디를 추천하고, 추천 이력과 커뮤니티 기능을 제공하는 졸업 팀 프로젝트의 **백엔드 담당 코드 정리본**입니다.
+
+프로젝트명 `WEARTHER`는 옷을 뜻하는 `WEAR`와 날씨를 뜻하는 `WEATHER`를 결합한 이름입니다.
 
 이 저장소에는 직접 담당한 백엔드 서비스만 포함합니다. Android 프론트엔드와 AI 모델 서버의 소스는 포함하지 않으며, 백엔드에서는 해당 서비스의 API를 연동합니다.
 
@@ -95,6 +97,8 @@ python manage.py runserver
 
 실제 키는 저장소에 올리지 않습니다. 각 서비스의 `.env.example`을 복사한 뒤 개인 환경에 맞게 값을 설정합니다.
 
+- `AI_SERVER_URL`: 옷 이미지 분석 서버 주소
+- `WEARTHER_AI_BASE_URL`: 코디 추천·설명 서버 주소
 - [`app-api/.env.example`](./app-api/.env.example)
 - [`weather-api/.env.example`](./weather-api/.env.example)
 
